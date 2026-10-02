@@ -592,14 +592,18 @@ function computeJump(editor) {
   }
 }
 
-/** 刷新上下文键 latexIme.canJumpOut（Tab 的按键绑定只在这个键为真时才生效） */
+/** 刷新上下文键（Tab 按键绑定靠它们决定要不要接管） */
 function refreshJumpContext(editor) {
   const ed = editor || vscode.window.activeTextEditor;
-  // Tab 有活干：光标前的词能展开成触发词片段（前缀也算），或能跳出
-  const ok = !!(computeTabExpand(ed) || computeJump(ed));
-  if (lastJumpCtx === ok) return;
-  lastJumpCtx = ok;
-  try { vscode.commands.executeCommand('setContext', 'latexIme.canJumpOut', ok); } catch (e) { /* ignore */ }
+  const canExpand = !!computeTabExpand(ed);   // 光标前的词是触发词/前缀 → 即使正在片段会话里也要接管（见下）
+  const canJump = !!computeJump(ed);          // 能跳出结构
+  const key = `${canExpand}|${canJump}`;
+  if (lastJumpCtx === key) return;
+  lastJumpCtx = key;
+  try {
+    vscode.commands.executeCommand('setContext', 'latexIme.canTabExpand', canExpand);
+    vscode.commands.executeCommand('setContext', 'latexIme.canJumpOut', canJump);
+  } catch (e) { /* ignore */ }
 }
 
 /** 兜底：执行原生 Tab（缩进 / 占位符跳转），万一不可用则插入一个缩进 */
@@ -671,16 +675,22 @@ function jumpOut() {
   // ① 光标前的词是触发词或它的前缀（func → function）→ 直接展开
   const exp = computeTabExpand(ed);
   if (exp) {
-    const doc = ed.document;
-    const range = new vscode.Range(doc.positionAt(exp.wordStart), doc.positionAt(exp.caretEnd));
-    ed.edit((b) => b.delete(range)).then((ok) => {
-      if (ok === false) return;
-      const p = doc.positionAt(exp.wordStart);
-      ed.selection = new vscode.Selection(p, p);
-      vscode.commands.executeCommand('editor.action.insertSnippet', { snippet: exp.snippet }).then(undefined, () => {});
-      log(`智能 Tab：展开触发词 ${exp.word}`);
-      trace(`智能 Tab：展开触发词 "${exp.word}"（输入的是 "${exp.typed}"）`);
-    });
+    const run = () => {
+      const cur = computeTabExpand(ed);
+      if (!cur) return;   // 退出会话后光标被带走 → 放弃
+      const doc = ed.document;
+      const range = new vscode.Range(doc.positionAt(cur.wordStart), doc.positionAt(cur.caretEnd));
+      ed.edit((b) => b.delete(range)).then((ok) => {
+        if (ok === false) return;
+        const p = doc.positionAt(cur.wordStart);
+        ed.selection = new vscode.Selection(p, p);
+        vscode.commands.executeCommand('editor.action.insertSnippet', { snippet: cur.snippet }).then(undefined, () => {});
+        log(`智能 Tab：展开触发词 ${cur.word}`);
+        trace(`智能 Tab：展开触发词 "${cur.word}"（输入的是 "${cur.typed}"）`);
+      });
+    };
+    // 若正在片段会话中（$1/$2 之间），先退出会话，免得新片段被卷进旧会话
+    Promise.resolve(vscode.commands.executeCommand('leaveSnippet')).then(run, run);
     return;
   }
 
