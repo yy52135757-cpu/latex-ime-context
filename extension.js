@@ -682,6 +682,7 @@ function computeTabExpand(editor) {
     const m = /[A-Za-z][A-Za-z0-9]*$/.exec(text.slice(Math.max(0, off - 32), off));
     if (!m) return null;
     const typed = m[0];
+    if (typed.length < 2) return null;          // 至少两个字符才算触发词/前缀，单字符不抢 Tab
     const wordStart = off - typed.length;
     if (wordStart > 0 && text[wordStart - 1] === '\\') return null;   // \thm 之类不动
 

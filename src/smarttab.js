@@ -216,11 +216,12 @@ module.exports = { findJumpTarget, wordBlocksJump };
 function wordBlocksJump(word, wordTriggers) {
   if (!word) return false;
   const w = String(word).toLowerCase();
+  if (w.length < 2) return false;                 // 单字符不当触发词/前缀
   const list = wordTriggers || [];
   for (const t of list) {
     const lt = String(t).toLowerCase();
     if (lt === w) return true;
-    if (w.length >= 2 && lt.startsWith(w)) return true;   // 单字母不算，避免 {d|} 这种也跳不出去
+    if (lt.startsWith(w)) return true;
   }
   return false;
 }

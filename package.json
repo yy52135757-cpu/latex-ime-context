@@ -2,7 +2,7 @@
   "name": "latex-ime-context",
   "displayName": "LaTeX IME Context",
   "description": "按 LaTeX 结构自动切换输入法：数学环境 / 命令 / 参数默认英文，正文 / 注释 / \\text{} 默认中文。",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "publisher": "gryllidae",
   "license": "MIT",
   "engines": {
