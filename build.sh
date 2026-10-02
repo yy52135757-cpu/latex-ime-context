@@ -12,6 +12,7 @@ echo "==> 运行测试"
 node test/context.test.js | tail -3
 node test/trigger.test.js | tail -3
 node test/smarttab.test.js | tail -3
+node test/autoconvert.test.js | tail -3
 
 echo "==> 打包 $VSIX"
 rm -rf .build "$VSIX"

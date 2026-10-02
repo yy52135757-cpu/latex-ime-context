@@ -4,6 +4,7 @@ const vscode = require('vscode');
 const path = require('path');
 const { execFile } = require('child_process');
 const { analyzeContext } = require('./src/context');
+const { autoConvert } = require('./src/autoconvert');
 const { findJumpTarget, wordBlocksJump } = require('./src/smarttab');
 const { runImSelect, ensureExecutable, isWsl, listWindowsLayouts, parseCode, sendSameImeToggle, disposeSameImeShell, getSameImeStats } = require('./src/ime');
 
@@ -242,6 +243,44 @@ function cancelPendingExpand(reason) {
 function triggerDelayMs() {
   const n = Number(cfg().get('triggerDelayMs', 300));
   return Number.isFinite(n) && n >= 0 ? n : 300;
+}
+
+/**
+ * 边打边转（下标 / 上标 / 后缀 / 分数）：用**纯文本编辑**实现，
+ * 不新开片段会话 —— 否则会把外层片段（如 function 模板）的占位符会话顶掉，
+ * 表现为「G1 变成 G_1 之后，Tab 再也去不了原来的位置」。
+ */
+function maybeAutoConvert(e, ed) {
+  try {
+    if (cfg().get('expandTypedTriggers', true) === false) return false;
+    if (!isLatexEditor(ed)) return false;
+    if (e.contentChanges.length !== 1) return false;
+    const ch = e.contentChanges[0];
+    const raw = ch.text || '';
+    if (!raw || raw.length > 8) return false;
+    const doc = e.document;
+    const text = doc.getText();
+    const offset = doc.offsetAt(ch.range.start) + raw.length;
+    // 只在数学环境里转（注释 / 正文不动）
+    const r = analyzeContext(text, Math.max(0, offset - raw.length), analyzeOptions());
+    if (r.reason !== 'math') return false;
+    const conv = autoConvert(text, offset, raw, { math: true });
+    if (!conv) return false;
+    const range = new vscode.Range(doc.positionAt(conv.start), doc.positionAt(conv.end));
+    const sel = conv.select || null;
+    ed.edit((b) => b.replace(range, conv.text)).then((ok) => {
+      if (ok === false) return;
+      if (sel) {
+        const a = doc.positionAt(sel[0]);
+        const c = doc.positionAt(sel[1]);
+        ed.selection = new vscode.Selection(a, c);
+      }
+    });
+    trace(`自动转换：${conv.rule} → ${JSON.stringify(conv.text)}`);
+    return true;
+  } catch (err) {
+    return false;
+  }
 }
 
 function maybeExpandTriggerWord(e, ed) {
@@ -886,6 +925,7 @@ function activate(context) {
           + e.contentChanges.slice(0, 4).map((c) => `[replaceLen=${c.rangeLength} text=${JSON.stringify(c.text.slice(0, 24))} @${c.range.start.line}:${c.range.start.character}]`).join(' '));
       }
       if (healIfCommittedIntoSnippet(e, ed)) return;   // 兜底：清掉落进片段的输入法提交
+      if (maybeAutoConvert(e, ed)) return;              // 边打边转（纯文本编辑，不新开片段会话）
       if (maybeExpandTriggerWord(e, ed)) return;        // 触发词已展开，不再走后续判定
       // 从输入内容反向校准「同 IME」状态：
       //  • 敲出汉字 ⇒ 当时必定是中文模式
