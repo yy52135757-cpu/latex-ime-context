@@ -926,6 +926,11 @@ function activate(context) {
     vscode.commands.registerCommand('latexIme.insertDm', () => quickInsert('dm', '显示公式')),
     vscode.commands.registerCommand('latexIme.insertMk', () => quickInsert('mk', '行内公式')),
     vscode.commands.registerCommand('latexIme.jumpOut', jumpOut),
+    // 占位符导航：我们插入的片段是 VS Code 片段会话，hsnips 自己的跳转命令对它无效（Tab 会“没反应”）
+    vscode.commands.registerCommand('latexIme.nextPlaceholder', () => {
+      trace('智能 Tab：占位符 → 下一个（VS Code 原生）');
+      return vscode.commands.executeCommand('jumpToNextSnippetPlaceholder');
+    }),
     vscode.commands.registerCommand('latexIme.resendToggle', () => {
       const ed = vscode.window.activeTextEditor;
       const shortcut = cfg().get('sameImeShortcut', 'ctrl+space');

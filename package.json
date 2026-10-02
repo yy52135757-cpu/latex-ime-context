@@ -2,7 +2,7 @@
   "name": "latex-ime-context",
   "displayName": "LaTeX IME Context",
   "description": "按 LaTeX 结构自动切换输入法：数学环境 / 命令 / 参数默认英文，正文 / 注释 / \\text{} 默认中文。",
-  "version": "0.10.15",
+  "version": "0.10.16",
   "publisher": "gryllidae",
   "license": "MIT",
   "engines": {
@@ -85,6 +85,10 @@
       {
         "command": "latexIme.jumpOut",
         "title": "LaTeX IME: 智能 Tab 跳出（跳到闭合符之后）"
+      },
+      {
+        "command": "latexIme.nextPlaceholder",
+        "title": "LaTeX IME: 片段占位符 → 下一个（内部使用）"
       }
     ],
     "keybindings": [
@@ -97,6 +101,11 @@
         "command": "latexIme.insertMk",
         "key": "ctrl+alt+k",
         "when": "editorTextFocus && editorLangId == latex"
+      },
+      {
+        "command": "latexIme.nextPlaceholder",
+        "key": "tab",
+        "when": "editorTextFocus && editorLangId == latex && hasNextTabstop && inSnippetMode"
       },
       {
         "command": "latexIme.jumpOut",
