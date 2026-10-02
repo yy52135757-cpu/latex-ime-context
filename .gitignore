@@ -1,0 +1,12 @@
+# 打包产物与临时文件
+*.vsix
+.build/
+dist/
+node_modules/
+
+# 诊断日志
+*.log
+
+# 系统文件
+.DS_Store
+Thumbs.db

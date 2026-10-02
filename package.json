@@ -1,0 +1,270 @@
+{
+  "name": "latex-ime-context",
+  "displayName": "LaTeX IME Context",
+  "description": "按 LaTeX 结构自动切换输入法：数学环境 / 命令 / 参数默认英文，正文 / 注释 / \\text{} 默认中文。",
+  "version": "0.10.8",
+  "publisher": "gryllidae",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onLanguage:latex",
+    "onLanguage:tex",
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "latexIme.menu", "title": "LaTeX IME: 打开菜单" },
+      { "command": "latexIme.toggleEnabled", "title": "LaTeX IME: 启用/禁用" },
+      { "command": "latexIme.toggleNotesLanguage", "title": "LaTeX IME: 切换笔记语言（中文笔记/英文笔记）" },
+      { "command": "latexIme.insertDm", "title": "LaTeX IME: 插入显示公式 \\[ … \\]" },
+      { "command": "latexIme.insertMk", "title": "LaTeX IME: 插入行内公式 $ … $" },
+      { "command": "latexIme.forceEnglish", "title": "LaTeX IME: 临时强制英文（6 秒 / 本行）" },
+      { "command": "latexIme.forceChinese", "title": "LaTeX IME: 临时强制中文（6 秒 / 本行）" },
+      { "command": "latexIme.switchToEnglish", "title": "LaTeX IME: 切换到英文输入法" },
+      { "command": "latexIme.switchToChinese", "title": "LaTeX IME: 切换到中文输入法" },
+      { "command": "latexIme.showStatus", "title": "LaTeX IME: 查看光标处期望模式" },
+      { "command": "latexIme.calibrate", "title": "LaTeX IME: 校准当前中/英状态" },
+      { "command": "latexIme.testSameImeToggle", "title": "LaTeX IME: 测试发送中/英切换键" },
+      { "command": "latexIme.resendToggle", "title": "LaTeX IME: 重发一次中/英切换键（状态反了时用）" },
+      { "command": "latexIme.diagnostics", "title": "LaTeX IME: 查看运行诊断信息" },
+      { "command": "latexIme.detectImeCodes", "title": "LaTeX IME: 选择中文/英文输入法（枚举系统已装）" },
+      { "command": "latexIme.jumpOut", "title": "LaTeX IME: 智能 Tab 跳出（跳到闭合符之后）" }
+    ],
+    "keybindings": [
+      {
+        "command": "latexIme.insertDm",
+        "key": "ctrl+alt+d",
+        "when": "editorTextFocus && editorLangId == latex"
+      },
+      {
+        "command": "latexIme.insertMk",
+        "key": "ctrl+alt+k",
+        "when": "editorTextFocus && editorLangId == latex"
+      },
+      {
+        "command": "latexIme.jumpOut",
+        "key": "tab",
+        "when": "editorTextFocus && editorLangId == latex && latexIme.canJumpOut && !inSnippetMode && !suggestWidgetVisible"
+      },
+      {
+        "command": "latexIme.resendToggle",
+        "key": "ctrl+alt+0",
+        "when": "editorTextFocus && editorLangId == latex"
+      }
+    ],
+    "configuration": {
+      "title": "LaTeX IME Context",
+      "properties": {
+        "latexIme.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用按 LaTeX 结构自动切换输入法。"
+        },
+        "latexIme.languageIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["latex", "tex"],
+          "description": "生效的语言 ID（LaTeX Workshop 下 .tex 为 latex）。"
+        },
+        "latexIme.imSelectPath": {
+          "type": "string",
+          "default": "",
+          "description": "im-select.exe 路径。留空使用扩展自带 bin/im-select.exe；填绝对路径可复用其他扩展的副本。"
+        },
+        "latexIme.imeSwitchMode": {
+          "type": "string",
+          "enum": ["layout", "sameIme"],
+          "default": "layout",
+          "markdownDescription": "切换方式。`layout`（默认，推荐）：用 im-select 切换整个键盘布局（中文=微软拼音所在布局，英文=en-IE/en-US 布局）。**每次切完都会读回真实编码核对**，所以绝不会出现「记忆与实际相反」的错位。`sameIme`：只在中文输入法内部切中/英（发送 `sameImeShortcut`），不改变键盘布局；但 VS Code 走 TSF、读不到内部状态，只能靠记忆+反推，偶发错位时需用「校准」或 Ctrl+Alt+0 急救。"
+        },
+        "latexIme.sameImeShortcut": {
+          "type": "string",
+          "enum": ["ctrl+space", "shift", "shift+space"],
+          "default": "ctrl+space",
+          "description": "sameIme 模式下用于切换中/英的按键，需与微软拼音设置里的「中/英模式切换」一致（当前默认 Ctrl+Space）。"
+        },
+        "latexIme.expandTypedTriggers": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "启用「输入触发词即插入」：当**输入法一次上屏**了 `dm`/`mk` 等词时（例如中文输入法下敲 dm 再按 Enter），扩展会把它替换成对应片段。单字符输入仍由 hsnips 处理，不会重复展开。"
+        },
+        "latexIme.triggerSnippets": {
+          "type": "object",
+          "default": {
+            "dm": "\\[\n\t$1\n.\\]\n$0",
+            "mk": "$${1}$ $2"
+          },
+          "markdownDescription": "触发词 → 片段（VS Code 片段语法）。**注意**：扩展还会自动读取你的 `latex.hsnips` 里的所有单词触发词（如 `thm` `lm` `sec` `lec` 等），所以这里只需写想覆盖的内容；此处的优先级最高。（`text` 已彻底移除，写在这里也会被忽略。）"
+        },
+        "latexIme.smartTab.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "智能 Tab 跳出：光标在 `{ }` `[ ]` `( )` `\\{ \\}` `\\[ \\]` `\\begin{…} … \\end{…}` 内部时，按 Tab 跳到闭合符之后；嵌套时可逐层跳出（先出最内层）。行首缩进、补全弹窗、hsnips 占位符跳转不受影响。状态栏菜单里可随时开关。"
+        },
+        "latexIme.smartTab.environments": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "智能 Tab 是否把 `\\begin{…} … \\end{…}` 环境也当作可跳出的结构（跳到 `\\end{…}` 之后）。"
+        },
+        "latexIme.smartTab.parentheses": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "智能 Tab 是否把圆括号 `( … )` 也当作可跳出的结构。"
+        },
+        "latexIme.smartTab.skipEnvs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["document"],
+          "markdownDescription": "不做「可跳出环境」处理的环境名。默认只有 `document` —— 否则在正文任何地方按 Tab 都会直接跳到文件末尾的 `\\end{document}`。想连 figure/tikzpicture 等也不参与，加进来即可。"
+        },
+        "latexIme.smartTab.newlineAfterEnv": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "从**块状结构**（`\\begin{…}…\\end{…}`、`\\[…\\]`、跨行 `{}`）里跳出时自动换行：闭合符后面本来就换行则落到下一行开头；下一行已经有内容（比如你预先写好的 `\\[`）则在它前面**新建一行**；到文件尾则补一个换行。关掉则一律停在闭合符后面。"
+        },
+        "latexIme.hsnipsFile": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "要读取的 hsnips 文件路径。留空则用 `~/.config/Code/User/hsnips/latex.hsnips`。扩展会从中提取单词触发词（跳过正则触发词与含 JS 插值的片段），使它们在输入法一次上屏时也能自动展开。"
+        },
+        "latexIme.triggerMatchMode": {
+          "type": "string",
+          "enum": ["exact", "prefix", "off"],
+          "default": "exact",
+          "markdownDescription": "快捷指令词的匹配方式。`exact`：只有完整打出 `dm`/`mk` 等才切英文；`prefix`：打到前缀（如 `d`）就切（容易误切、可能把你困在英文模式）；`off`：关闭该规则（推荐配合 `Ctrl+Alt+D` / `Ctrl+Alt+K` 快捷键使用）。"
+        },
+        "latexIme.chineseCode": {
+          "type": "string",
+          "default": "2052",
+          "markdownDescription": "中文输入法编码（LANGID）。支持十进制 `2052`、`0x804`、8 位 KLID `00000804`。**启动时会自动核对系统已装输入法，不符则自动改用正确的那个**。"
+        },
+        "latexIme.englishCode": {
+          "type": "string",
+          "default": "1033",
+          "markdownDescription": "英文输入法编码（LANGID）。**注意**：`1033` 是英语(美国)，若系统里没装该键盘，切换会毫无反应；此时扩展会在启动时自动改用你实际安装的英文键盘（如 en-IE = `6153`）。可用命令「选择中文/英文输入法」手动指定。"
+        },
+        "latexIme.captureInitialImeAsEnglish": {
+          "type": "boolean",
+          "default": true,
+          "description": "启动时读取当前编码，若非中文则记为英文目标。"
+        },
+        "latexIme.notesLanguage": {
+          "type": "string",
+          "enum": ["chinese", "english"],
+          "default": "chinese",
+          "markdownDescription": "**笔记语言总开关**。`english` 时正文、注释、`\\text{}`、`\\caption{}` 等一律默认英文（数学/命令本来就是英文），适合写英文笔记；`chinese` 时按结构判定。用命令「LaTeX IME: 切换笔记语言」或点击状态栏切换。"
+        },
+        "latexIme.quickInsert.dm": {
+          "type": "string",
+          "default": "\\[\n\t$1\n.\\]\n$0",
+          "description": "Ctrl+Alt+D 插入的片段（VS Code 片段语法）。默认与 hsnips 的 dm 一致。"
+        },
+        "latexIme.quickInsert.mk": {
+          "type": "string",
+          "default": "$${1}$ $2",
+          "description": "Ctrl+Alt+K 插入的片段（VS Code 片段语法）。默认与 hsnips 的 mk 一致。"
+        },
+        "latexIme.proseMode": {
+          "type": "string",
+          "enum": ["chinese", "english"],
+          "default": "chinese",
+          "description": "正文（非数学、非注释）的默认模式。"
+        },
+        "latexIme.commentMode": {
+          "type": "string",
+          "enum": ["chinese", "english"],
+          "default": "chinese",
+          "description": "% 注释内的默认模式。"
+        },
+        "latexIme.forceEnglishInPreamble": {
+          "type": "boolean",
+          "default": false,
+          "description": "导言区（\\begin{document} 之前）强制英文。默认关闭：导言区也按结构判定（命令/参数为英文，\\title{} 等内容为中文）。"
+        },
+        "latexIme.triggerWords": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [
+            "dm", "mk", "beg", "thm", "thmt", "lm", "lmt", "def", "deft",
+            "proof", "prooft", "rm", "enu", "sec", "bf", "fr", "sr", "cb",
+            "td", "sb", "comp", "oper", "bar", "hat", "set", "function",
+            "box", "lec", "000", "ooo", "cc", "sum", "lim", "RR"
+          ],
+          "description": "快捷指令词表。光标前已上屏的 ASCII 词若是它们的完整词或前缀，则切英文，便于在中文输入法下敲出 dm/mk 等触发词。"
+        },
+        "latexIme.anyAsciiWordForcesEnglish": {
+          "type": "boolean",
+          "default": false,
+          "description": "更激进：光标前只要出现已上屏的 ASCII 词就切英文（适合以英文为主的笔记）。"
+        },
+        "latexIme.extraMathEnvs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "追加视为数学环境的环境名（默认已含 align/equation/cases/matrix/tikzcd 等）。"
+        },
+        "latexIme.extraTextArgs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "追加「参数内容为中文」的命令（默认已含 text/textbf/emph/caption/section 等）。"
+        },
+        "latexIme.extraEnglishArgs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "追加「参数内容为英文」的命令（默认已含 label/ref/cite/url/includegraphics 等）。"
+        },
+        "latexIme.englishEnvs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "强制为英文的环境名。"
+        },
+        "latexIme.chineseEnvs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "强制为中文的环境名。"
+        },
+        "latexIme.switchProtectionMs": {
+          "type": "number",
+          "default": 300,
+          "description": "两次切换之间的最小间隔（毫秒），防抖。"
+        },
+        "latexIme.debounceMs": {
+          "type": "number",
+          "default": 40,
+          "description": "光标移动后延迟多少毫秒再进行判定。"
+        },
+        "latexIme.statusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "在状态栏显示当前期望的输入法模式。"
+        },
+        "latexIme.warnOnMissingBinary": {
+          "type": "boolean",
+          "default": true,
+          "description": "找不到 im-select 时提示一次。"
+        },
+        "latexIme.debug": {
+          "type": "boolean",
+          "default": false,
+          "description": "在输出面板打印调试日志。"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node test/context.test.js"
+  }
+}
