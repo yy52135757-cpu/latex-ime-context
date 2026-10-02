@@ -675,18 +675,22 @@ function jumpOut() {
   // ① 光标前的词是触发词或它的前缀（func → function）→ 直接展开
   const exp = computeTabExpand(ed);
   if (exp) {
+    const doc = ed.document;
     const run = () => {
-      const cur = computeTabExpand(ed);
-      if (!cur) return;   // 退出会话后光标被带走 → 放弃
-      const doc = ed.document;
-      const range = new vscode.Range(doc.positionAt(cur.wordStart), doc.positionAt(cur.caretEnd));
+      // 用「按 Tab 那一刻」记下的区间：退出旧片段会话可能把光标带走，不能依赖它
+      const range = new vscode.Range(doc.positionAt(exp.wordStart), doc.positionAt(exp.caretEnd));
+      if (doc.getText(range) !== exp.typed) {     // 区间已不是刚才那个词 → 放弃，走默认 Tab
+        trace(`智能 Tab：放弃展开 "${exp.word}"（区间内容已变）`);
+        fallbackTab(ed);
+        return;
+      }
       ed.edit((b) => b.delete(range)).then((ok) => {
         if (ok === false) return;
-        const p = doc.positionAt(cur.wordStart);
+        const p = doc.positionAt(exp.wordStart);
         ed.selection = new vscode.Selection(p, p);
-        vscode.commands.executeCommand('editor.action.insertSnippet', { snippet: cur.snippet }).then(undefined, () => {});
-        log(`智能 Tab：展开触发词 ${cur.word}`);
-        trace(`智能 Tab：展开触发词 "${cur.word}"（输入的是 "${cur.typed}"）`);
+        vscode.commands.executeCommand('editor.action.insertSnippet', { snippet: exp.snippet }).then(undefined, () => {});
+        log(`智能 Tab：展开触发词 ${exp.word}`);
+        trace(`智能 Tab：展开触发词 "${exp.word}"（输入的是 "${exp.typed}"）`);
       });
     };
     // 若正在片段会话中（$1/$2 之间），先退出会话，免得新片段被卷进旧会话
