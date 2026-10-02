@@ -113,8 +113,10 @@ function autoDetectLayouts(interactive) {
 // 内置触发词（hsnips 文件里已移除的那几个）
 // 说明：text 触发词已按用户要求移除（中文输入法下偶发 "\textt{}"，用户不需要该功能），
 // 直接输入 text 就是普通字母，不会有任何自动展开。
+// dm 末尾不要 $0：多行片段已在插入时补行尾换行，走完 $1 后 Tab 一次就落到 .\] 的下一行，
+// 不会先被 $0 带到 .\] 外面、再误触发跳出。
 const BUILTIN_TRIGGERS = {
-  dm: '\\[\n\t$1\n.\\]\n$0',
+  dm: '\\[\n\t$1\n.\\]',
   mk: '$${1}$ $2',
   today: '${CURRENT_YEAR}-${CURRENT_MONTH}-${CURRENT_DATE}',
 };
