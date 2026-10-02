@@ -56,20 +56,22 @@ checkJump('三层嵌套：第二层', '{{{a}|}}', '{{{a}}|}');
 checkJump('括号混搭：{ [ (a|) ] }', '{[(a|)]}', '{[(a)|]}');
 
 // ---------- 环境 ----------
-checkJump('环境：跳到 \\end{…} 之后', '\\begin{thm}\n|\n\\end{thm}', '\\begin{thm}\n\n\\end{thm}|');
-// 环境后面就是换行时，落点直接到下一行开头
-checkJump('环境：后面有换行 → 落到下一行开头', '\\begin{thm}\n|\n\\end{thm}\n下一段', '\\begin{thm}\n\n\\end{thm}\n|下一段');
+checkJump('环境：跳到 \\end{…} 之后（紧贴）', '\\begin{thm}\n|\n\\end{thm}', '\\begin{thm}\n\n\\end{thm}|');
+// 从内部跳出就是紧贴 \end{…}，不再自动换行
+checkJump('环境：从内部跳出 → 紧贴 \\end{…}（不换行）', '\\begin{thm}\n|\n\\end{thm}\n下一段', '\\begin{thm}\n\n\\end{thm}|\n下一段');
 checkJump('环境：\\end 后面还有内容 → 就停在 \\end 之后', '\\begin{thm}\n|\n\\end{thm} 后续', '\\begin{thm}\n\n\\end{thm}| 后续');
-checkJump('环境：可用设置关掉「落到下一行」', '\\begin{thm}\n|\n\\end{thm}\n下一段', '\\begin{thm}\n\n\\end{thm}|\n下一段', { newlineAfterEnv: false });
+// 「落到下一行」只发生在光标已经在 \end{…} 之后、再按 Tab 时
+checkJump('已在 \\end{a} 之后：后面有换行 → 落到下一行开头', '\\begin{a}\n\\end{a}|\n下一段', '\\begin{a}\n\\end{a}\n|下一段');
+checkJump('已在 \\end{a} 之后：可用设置关掉「落到下一行」', '\\begin{a}\n\\end{a}|\n下一段', '\\begin{a}\n\\end{a}|\n下一段', { newlineAfterEnv: false });
 checkJump('环境 + 内层括号：先出括号', '\\begin{e}{a|b}\\end{e}', '\\begin{e}{ab}|\\end{e}');
 checkJump('环境 + 内层括号：再出环境', '\\begin{e}{ab}|\\end{e}', '\\begin{e}{ab}\\end{e}|');
 checkJump('环境可选参数的 [ ] 也能跳', '\\begin{theorem}[标|题]', '\\begin{theorem}[标题]|');
-checkJump('不同环境名互不干扰', '\\begin{a}\\begin{b}|\n\\end{b}\n\\end{a}', '\\begin{a}\\begin{b}\n\\end{b}\n|\\end{a}');
+checkJump('不同环境名互不干扰', '\\begin{a}\\begin{b}|\n\\end{b}\n\\end{a}', '\\begin{a}\\begin{b}\n\\end{b}|\n\\end{a}');
 checkNull('只有 \\end 没有 \\begin', '\\end{a}|', undefined);
 
 // ---------- document 环境默认被排除 ----------
 checkNull('document 不作可跳出环境（否则会跳到文件末尾）', '\\begin{document}\n|\n\\end{document}');
-checkJump('document 里的定理照常跳出', '\\begin{document}\n\\begin{thm}\n|\n\\end{thm}\n\\end{document}', '\\begin{document}\n\\begin{thm}\n\n\\end{thm}\n|\\end{document}');
+checkJump('document 里的定理照常跳出', '\\begin{document}\n\\begin{thm}\n|\n\\end{thm}\n\\end{document}', '\\begin{document}\n\\begin{thm}\n\n\\end{thm}|\n\\end{document}');
 checkJump('skipEnvs 为空时 document 也算', '\\begin{document}\n|\n\\end{document}', '\\begin{document}\n\n\\end{document}|', { skipEnvs: [] });
 
 // ---------- 不该跳的情况 ----------
@@ -97,25 +99,21 @@ checkJump('命令名里的括号参数', '\\frac{a|}{b}', '\\frac{a}|{b}');
   check('foo → 不拦', wordBlocksJump('foo', T) === false);
 }
 
-// ---------- 块状结构：跳出后的换行 ----------
+// ---------- 块状结构：从内部跳出也是紧贴闭合符（不改写文档）----------
 {
   const r1 = findJumpTarget('\\[a\nb\n\\]', 4);
-  check('多行 \\[…\\] 跳出：行尾无换行 → 需要补一行', r1 && r1.block === true && r1.wantsNewline === true, JSON.stringify(r1));
-  const r2 = findJumpTarget('\\[a\nb\n\\]后续', 4);
-  check('多行 \\[…\\] 后面有内容 → 不补行', r2 && r2.wantsNewline === false, JSON.stringify(r2));
-  const r3 = findJumpTarget('\\[a\nb\n\\]\n下一段', 4);
-  check('落点在已有内容的行首 → 新建一行', r3 && r3.offset === 9 && r3.insert === '\n', JSON.stringify(r3));
-  const r4 = findJumpTarget('{a\nb}', 2);
-  check('跨行大括号 → 也算块状结构', r4 && r4.block === true && r4.wantsNewline === true, JSON.stringify(r4));
-  const r5 = findJumpTarget('{ab}', 2);
-  check('单行大括号 → 不做换行处理', r5 && r5.block === false && r5.wantsNewline === false, JSON.stringify(r5));
+  check('多行 \\[…\\] 内部跳出：紧贴 \\] 之后', r1 && r1.offset === 8 && !r1.insert && !r1.wantsNewline, JSON.stringify(r1));
+  const r2 = findJumpTarget('{a\nb}', 2);
+  check('跨行大括号内部跳出：紧贴 } 之后', r2 && r2.offset === 5 && !r2.insert, JSON.stringify(r2));
+  const r3 = findJumpTarget('{ab}', 2);
+  check('单行大括号内部跳出：紧贴 } 之后', r3 && r3.offset === 4 && !r3.insert, JSON.stringify(r3));
 }
 
 // ---------- 光标紧跟块状结构闭合符之后，也算可跳出 ----------
 {
   const t1 = '\\begin{a}\n\\end{a}';
   const r1 = findJumpTarget(t1, t1.length);
-  check('紧跟 \\end{a} 之后（文件尾）→ 可跳出且补一行', r1 && r1.afterCloser === true && r1.wantsNewline === true, JSON.stringify(r1));
+  check('紧跟 \\end{a} 之后（文件尾）→ 紧贴 \\end{a}，不补行', r1 && r1.afterCloser === true && r1.offset === t1.length && !r1.insert, JSON.stringify(r1));
   const t2 = '\\begin{a}\n\\end{a}  \n下一段';
   const r2 = findJumpTarget(t2, '\\begin{a}\n\\end{a}'.length);
   check('紧跟 \\end{a} 之后（后面是换行）→ 落到下一行', r2 && r2.afterCloser === true && r2.offset === t2.indexOf('下一段'), JSON.stringify(r2));
@@ -126,20 +124,31 @@ checkJump('命令名里的括号参数', '\\frac{a|}{b}', '\\frac{a}|{b}');
   check('紧跟单行 {} 之后 → 不算（行内结构）', r4 === null, JSON.stringify(r4));
 }
 
-// ---------- 落点在已有内容的行首 → 新建一行 ----------
+// ---------- 从内部跳出不改写文档（旧的「新建一行」逻辑已移除）----------
 {
   const t1 = '\\[\n  f\n.\\]\n  \\[\n  g\n.\\]';
   const r1 = findJumpTarget(t1, 4);          // 光标在 f 之后
-  const lineStartOfNext = t1.indexOf('  \\[', 3);
-  check('下一行已有内容（预写好的 \\[）→ 落点在该行行首', r1 && r1.offset === lineStartOfNext, JSON.stringify(r1));
-  check('下一行已有内容 → 插入「缩进+换行」，光标落在缩进后', r1 && r1.insert === '  \n' && r1.caret === lineStartOfNext + 2, JSON.stringify(r1));
-  const t2 = '  \[\na\n  \]';
-  const r2b = findJumpTarget(t2, 4);
-  check('文件尾收尾：补「换行+缩进」（缩进照闭合符那行）', r2b && r2b.insert === '\n  ' && r2b.caret === t2.length + 3, JSON.stringify(r2b));
+  check('跳出第一个公式：紧贴 .\\] 之后，不插空行', r1 && r1.offset === t1.indexOf('.\\]') + 3 && !r1.insert, JSON.stringify(r1));
+  const t2 = '\[\na\n\]';
+  const r2 = findJumpTarget(t2, 3);
+  check('文件尾的公式：跳出后紧贴 \\]，不补换行', r2 && r2.offset === t2.length && !r2.insert, JSON.stringify(r2));
+}
 
-  const t3 = '\[\na\n\]\n\n  x';
-  const r2 = findJumpTarget(t3, 3);
-  check('下一行是空行 → 不插入，直接落过去', r2 && r2.insert === null && r2.offset === t3.indexOf('\n\n') + 1, JSON.stringify(r2));
+// ---------- 行布局环境（aligned）：从中间跳出也是紧贴 \end{aligned} ----------
+{
+  const m = (s) => { const o = s.indexOf('|'); return { text: s.slice(0, o) + s.slice(o + 1), offset: o }; };
+
+  const t1 = m('\\[\n\\begin{aligned}\nx &= y|\n\\\\\nz\n\\end{aligned}\n.\\]');
+  const r1 = findJumpTarget(t1.text, t1.offset);
+  const tight1 = t1.text.indexOf('\\end{aligned}') + '\\end{aligned}'.length;
+  check('aligned 块中间：紧贴 \\end{aligned} 之后（不换行）', r1 && r1.offset === tight1 && !r1.insert,
+    JSON.stringify(r1));
+
+  const t2 = m('\\[\n  \\begin{aligned}\n    x &= y|\n    \\\\\n    z\n  \\end{aligned}\n.\\]');
+  const r2 = findJumpTarget(t2.text, t2.offset);
+  const tight2 = t2.text.indexOf('\\end{aligned}') + '\\end{aligned}'.length;
+  check('aligned（有缩进）：同样紧贴 \\end{aligned} 之后', r2 && r2.offset === tight2 && !r2.insert,
+    JSON.stringify(r2));
 }
 
 console.log(`\n结果：${pass} 通过，${fail} 失败`);

@@ -2,7 +2,7 @@
   "name": "latex-ime-context",
   "displayName": "LaTeX IME Context",
   "description": "按 LaTeX 结构自动切换输入法：数学环境 / 命令 / 参数默认英文，正文 / 注释 / \\text{} 默认中文。",
-  "version": "0.11.1",
+  "version": "0.11.2",
   "publisher": "gryllidae",
   "license": "MIT",
   "engines": {
@@ -183,7 +183,7 @@
         "latexIme.smartTab.enabled": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "智能 Tab 跳出：光标在 `{ }` `[ ]` `( )` `\\{ \\}` `\\[ \\]` `\\begin{…} … \\end{…}` 内部时，按 Tab 跳到闭合符之后；嵌套时可逐层跳出（先出最内层）。行首缩进、补全弹窗、hsnips 占位符跳转不受影响。状态栏菜单里可随时开关。"
+          "markdownDescription": "智能 Tab 跳出：光标在 `{ }` `[ ]` `( )` `\\{ \\}` `\\[ \\]` `\\begin{…} … \\end{…}` 内部时，按 Tab **紧贴跳到闭合符之后**（只挪光标、不改写文档）；嵌套时可逐层跳出（先出最内层）。选中默认值（如 `^{-1}` 的 `-1`）时也照跳、不删文字。行首缩进、补全弹窗、hsnips 占位符跳转、跨行选区缩进不受影响。状态栏菜单里可随时开关。"
         },
         "latexIme.smartTab.environments": {
           "type": "boolean",
@@ -208,7 +208,7 @@
         "latexIme.smartTab.newlineAfterEnv": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "从**块状结构**（`\\begin{…}…\\end{…}`、`\\[…\\]`、跨行 `{}`）里跳出时自动换行：闭合符后面本来就换行则落到下一行开头；下一行已经有内容（比如你预先写好的 `\\[`）则在它前面**新建一行**；到文件尾则补一个换行。关掉则一律停在闭合符后面。"
+          "markdownDescription": "光标**已经紧贴闭合符之后**时（后面只剩空白/换行）：块状结构（`\\begin{…}…\\end{…}`、`\\[…\\]`、跨行 `{}`）后面是换行则落到下一行开头。关掉则一律停在闭合符后面（同一行）。从结构内部跳出不受此项影响：始终紧贴闭合符。"
         },
         "latexIme.hsnipsFile": {
           "type": "string",

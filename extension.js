@@ -597,7 +597,8 @@ function resyncLayoutState() {
 }
 
 // ---------------------------------------------------------------------------
-// 智能 Tab 跳出：光标在 { } [ ] ( ) \{ \} \[ \] \begin{…} 内部时，Tab 跳到闭合符之后
+// 智能 Tab 跳出：光标在 { } [ ] ( ) \{ \} \[ \] \begin{…} 内部时，Tab 紧贴跳到闭合符之后
+// （只挪光标、不改写文字；选中默认值时也照跳，不会把选中的默认值删掉）。
 // 用上下文键 latexIme.canJumpOut 控制按键绑定 —— 只在真能跳出时接管 Tab，
 // 其余情况（行首缩进、补全弹窗、hsnips 占位符跳转）完全不受影响。
 // ---------------------------------------------------------------------------
@@ -610,7 +611,10 @@ function computeJump(editor) {
     if (!editor || !isLatexEditor(editor)) return null;
     if (cfg().get('smartTab.enabled', true) === false) return null;
     const sel = editor.selection;
-    if (!sel || !sel.isEmpty) return null;
+    if (!sel) return null;
+    // 非空选区照常算跳出目标（如 ^ → ^{-1} 后 -1 被选中：Tab 应跳出、且不碰选中的文字）；
+    // 跨行选区是「缩进整段」的意图，让给默认 Tab。
+    if (!sel.isEmpty && sel.start.line !== sel.end.line) return null;
     const doc = editor.document;
     const pos = sel.active;
     // 只在「非空行的行首缩进」时让给默认 Tab；空行（如环境体里那行只有缩进）照样跳出
@@ -746,25 +750,10 @@ function jumpOut() {
     return;
   }
 
-  // ② 能跳出就跳出
+  // ② 能跳出就跳出（只挪光标、不改写文字）
   const hit = computeJump(ed);
   if (!hit) { fallbackTab(ed); return; }
   const doc = ed.document;
-
-  // 块状结构跳出：需要新建一行时由 smarttab 给出 insert 文本与光标位置
-  if (hit.insert) {
-    const at = doc.positionAt(hit.offset);
-    const caret = typeof hit.caret === 'number' ? hit.caret : hit.offset + hit.insert.length;
-    ed.edit((b) => b.insert(at, hit.insert)).then((ok) => {
-      if (ok === false) return;
-      const p = ed.document.positionAt(caret);
-      ed.selection = new vscode.Selection(p, p);
-      try { ed.revealRange(new vscode.Range(p, p)); } catch (e) { /* ignore */ }
-    });
-    log(`智能 Tab：跳出 ${hit.kind}${hit.env ? '(' + hit.env + ')' : ''} 并新建一行`);
-    trace(`智能 Tab：跳出 ${hit.kind}${hit.env ? '(' + hit.env + ')' : ''} 并新建一行`);
-    return;
-  }
 
   const p = doc.positionAt(hit.offset);
   ed.selection = new vscode.Selection(p, p);

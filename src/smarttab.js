@@ -158,48 +158,28 @@ function findJumpTarget(text, offset, options) {
   }
   if (!best) return null;
 
-  // 这一对是不是「跨行的块状结构」（环境、\[…\]、跨行大括号）；只有块状结构才做换行处理
+  // 光标在结构「内部」：Tab 就是单纯地「跳到闭合符之后」——
+  // 紧贴闭合符、同一行，不改写文档（不换行、不缩进、不补空行）。
+  // \end{…} 也一样：跳完就停在 } 后面，要换行自己按回车。
+  if (!bestAfter) {
+    return {
+      offset: best.closeEnd, kind: best.kind, env: best.env,
+      block: false, wantsNewline: false, afterCloser: false, insert: null, caret: null,
+    };
+  }
+
+  // 光标已经紧贴在闭合符之后（后面只剩空白/换行）：块状结构且后面就是换行 → 落到下一行开头。
   const nl = text.indexOf('\n', best.openStart);
   const block = nl !== -1 && nl < best.closeEnd;
-
-  // 块状结构跳出的落点：
-  //   • 闭合符后面本来就换行 → 直接落到下一行开头
-  //   • 闭合符后面到行尾/文件尾都是空白但没有换行 → wantsNewline=true，由调用方补一个换行
   let target = best.closeEnd;
-  let wantsNewline = false;
   if (newlineAfterEnv && block) {
     let j = target;
     while (j < n && (text[j] === ' ' || text[j] === '\t')) j += 1;
     if (j < n && text[j] === '\n') target = j + 1;
-    else if (j >= n) wantsNewline = true;
   }
-  // 落点的收尾处理（仅块状结构）：
-  //   • 落点恰在行首、而这一行已经有内容（例如下一行已写好的 \[ ）→ 新建一行（insert）
-  //   • 后面只剩空白且到了文件尾 → 补一个换行
-  let insert = null;
-  let caret = null;
-  if (block && newlineAfterEnv) {
-    const lineStart = text.lastIndexOf('\n', target - 1) + 1;
-    const atLineStart = target === lineStart;
-    let q = target;
-    while (q < n && text[q] !== '\n') q += 1;
-    if (atLineStart && text.slice(target, q).trim() !== '') {
-      // 落点正好在行首、而这一行已经有内容（比如预先写好的 \[ ）：
-      // 在它前面插「缩进 + 换行」，光标停在缩进之后 —— 即全新的一行，原行整体下移、缩进不变
-      const indent = (/^[ \t]*/.exec(text.slice(target)) || [''])[0];
-      insert = indent + '\n';
-      caret = target + indent.length;
-    } else if (q >= n && text.slice(target).trim() === '') {
-      // 后面只剩空白并且到了文件尾：补「换行 + 缩进」
-      const indent = (/^[ \t]*/.exec(text.slice(lineStart)) || [''])[0];
-      insert = '\n' + indent;
-      caret = target + insert.length;
-    }
-  }
-
   return {
     offset: target, kind: best.kind, env: best.env,
-    block, wantsNewline: !!insert, afterCloser: bestAfter, insert, caret,
+    block, wantsNewline: false, afterCloser: true, insert: null, caret: null,
   };
 }
 
