@@ -129,6 +129,11 @@ function hsnipsFilePath() {
   try {
     const os = require('os');
     const pathMod = require('path');
+    // Windows 原生：hsnips 片段在 %APPDATA%\Code\User\hsnips\；WSL/Linux/macOS 在 ~/.config/Code/User/hsnips/
+    if (process.platform === 'win32') {
+      const appData = process.env.APPDATA || pathMod.join(os.homedir(), 'AppData', 'Roaming');
+      return pathMod.join(appData, 'Code', 'User', 'hsnips', 'latex.hsnips');
+    }
     return pathMod.join(os.homedir(), '.config', 'Code', 'User', 'hsnips', 'latex.hsnips');
   } catch (e) {
     return '';
@@ -722,7 +727,7 @@ function activate(context) {
 
   // 确保自带 exe 可执行（WSL 下需要 +x 才能通过互操作调用）
   ensureExecutable(resolveExePath());
-  if (!isWsl()) log('非 WSL 环境：将通过 PowerShell 调用 im-select');
+  if (!isWsl()) log(`非 WSL 环境（${process.platform}）：im-select 直接调用；macOS/Linux 需自备兼容的 im-select`);
 
   // 启动时读取当前输入法编码（仅 layout 模式需要）
   const switchMode0 = cfg().get('imeSwitchMode', 'layout');
