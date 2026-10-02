@@ -199,6 +199,10 @@ let pendingExpand = null;
 // 说明那是输入法把提交塞进了片段内部（因为我们在组合串结束前就展开了），自动清掉它。
 let lastSnippet = null;
 
+// 「边打边转」留下的选区（如 ^ → ^{-1} 时选中的 -1）：
+// 只要它还保持原样，按 Tab 就直接跳出到闭合符之后（即使正在片段会话 / 补全弹窗里）。
+let autoSel = null;
+
 function snippetTabOffset(snippet) {
   const i = snippet.indexOf('$1');
   if (i >= 0) return i;
@@ -274,6 +278,16 @@ function maybeAutoConvert(e, ed) {
         const a = doc.positionAt(sel[0]);
         const c = doc.positionAt(sel[1]);
         ed.selection = new vscode.Selection(a, c);
+        // 记下这个「我们的选区」（如 ^{-1} 里选中的 -1）：
+        // 在它保持原样期间按 Tab，直接跳出到闭合符之后（片段会话 / 补全弹窗里也生效）。
+        autoSel = {
+          uri: doc.uri.toString(),
+          start: sel[0],
+          end: sel[1],
+          text: doc.getText(new vscode.Range(a, c)),
+        };
+        refreshJumpContext(ed);
+        trace(`自动选区 "${autoSel.text}" → Tab 可直接跳出`);
       }
     });
     trace(`自动转换：${conv.rule} → ${JSON.stringify(conv.text)}`);
@@ -643,17 +657,36 @@ function computeJump(editor) {
   }
 }
 
+/** 「边打边转」留下的选区是否还原样保持着（决定 Tab 是否直接跳出） */
+function autoSelectActive(editor) {
+  try {
+    if (!autoSel) return false;
+    if (!editor || !editor.document) return false;
+    if (editor.document.uri.toString() !== autoSel.uri) return false;
+    const sel = editor.selection;
+    if (!sel || sel.isEmpty) return false;
+    const s = editor.document.offsetAt(sel.start);
+    const e = editor.document.offsetAt(sel.end);
+    if (s !== autoSel.start || e !== autoSel.end) return false;
+    return editor.document.getText(new vscode.Range(sel.start, sel.end)) === autoSel.text;
+  } catch (e) {
+    return false;
+  }
+}
+
 /** 刷新上下文键（Tab 按键绑定靠它们决定要不要接管） */
 function refreshJumpContext(editor) {
   const ed = editor || vscode.window.activeTextEditor;
   const canExpand = !!computeTabExpand(ed);   // 光标前的词是触发词/前缀 → 即使正在片段会话里也要接管（见下）
   const canJump = !!computeJump(ed);          // 能跳出结构
-  const key = `${canExpand}|${canJump}`;
+  const auto = autoSelectActive(ed);          // 刚边打边转生成的选区还在 → Tab 直接跳出
+  const key = `${canExpand}|${canJump}|${auto}`;
   if (lastJumpCtx === key) return;
   lastJumpCtx = key;
   try {
     vscode.commands.executeCommand('setContext', 'latexIme.canTabExpand', canExpand);
     vscode.commands.executeCommand('setContext', 'latexIme.canJumpOut', canJump);
+    vscode.commands.executeCommand('setContext', 'latexIme.autoSelected', auto);
   } catch (e) { /* ignore */ }
 }
 
@@ -755,11 +788,13 @@ function jumpOut() {
   if (!hit) { fallbackTab(ed); return; }
   const doc = ed.document;
 
+  const usedAuto = autoSelectActive(ed);
   const p = doc.positionAt(hit.offset);
   ed.selection = new vscode.Selection(p, p);
+  if (usedAuto) { autoSel = null; refreshJumpContext(ed); }
   try { ed.revealRange(new vscode.Range(p, p)); } catch (e) { /* ignore */ }
   log(`智能 Tab：跳出 ${hit.kind}${hit.env ? '(' + hit.env + ')' : ''} → offset ${hit.offset}`);
-  trace(`智能 Tab：跳出 ${hit.kind}${hit.env ? '(' + hit.env + ')' : ''} @${hit.offset}`);
+  trace(`智能 Tab：跳出 ${hit.kind}${hit.env ? '(' + hit.env + ')' : ''} @${hit.offset}${usedAuto ? '（自动选区）' : ''}`);
 }
 
 /** 总开关菜单（点击状态栏） */
