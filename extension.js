@@ -189,7 +189,9 @@ function effectiveTriggers() {
 // —— 触发词展开 ——
 // 输入法敲字时，组合串会「临时写进文档 → 被清空 → 最后才真正提交」，
 // 若在中间态就展开，Enter 的提交会落进片段内部（表现为 \[ … dm … .\]）。
-// 所以：命中候选后延迟 150ms 再动手，期间只要出现「组合串更新/清空」就撤销。
+// 所以：命中候选后延迟一会儿再动手，期间只要出现「组合串更新/清空」就撤销。
+// 延迟默认 300ms（可用 latexIme.triggerDelayMs 调）：实测输入法组合串从写入到真正提交
+// 可能花 ~175ms，150ms 会抢在提交之前展开，导致后续的「清空 + 提交」把片段削掉、并留下多余的触发词。
 let pendingExpand = null;
 
 // 兜底用：记录刚插入的片段，若之后有「恰好落在片段占位符处、且内容就是该触发词」的插入，
@@ -234,6 +236,12 @@ function cancelPendingExpand(reason) {
     trace(`取消挂起的展开 "${pendingExpand.word}"（${reason}）`);
     pendingExpand = null;
   }
+}
+
+/** 自动展开的等待时间（ms）：足够覆盖输入法「组合串写入 → 清空 → 真正提交」的全过程 */
+function triggerDelayMs() {
+  const n = Number(cfg().get('triggerDelayMs', 300));
+  return Number.isFinite(n) && n >= 0 ? n : 300;
 }
 
 function maybeExpandTriggerWord(e, ed) {
@@ -339,10 +347,10 @@ function maybeExpandTriggerWord(e, ed) {
         until: Date.now() + 2500,
       };
     });
-  }, 150);
+  }, triggerDelayMs());
 
   pendingExpand = { timer, word };
-  trace(`候选 "${word}"（原文 ${JSON.stringify(raw.slice(0, 12))}，replaceLen=${ch.rangeLength}）→ 150ms 后展开`);
+  trace(`候选 "${word}"（原文 ${JSON.stringify(raw.slice(0, 12))}，replaceLen=${ch.rangeLength}）→ ${triggerDelayMs()}ms 后展开`);
   return true;
 }
 

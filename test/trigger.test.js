@@ -29,6 +29,7 @@ const DEFAULTS = {
   'latexIme.imeSwitchMode': 'sameIme',           // 避免 activate 时去枚举 Windows 输入法
   'latexIme.captureInitialImeAsEnglish': false,
   'latexIme.expandTypedTriggers': true,
+  'latexIme.triggerDelayMs': 150,               // 测试里缩短，避免每个用例跑太久
   'latexIme.triggerSnippets': { dm: '\\[\n\t$1\n.\\]\n$0', mk: '$${1}$ $2', text: '\\text{$1}$0' },
   'latexIme.languageIds': ['latex', 'tex'],
   'latexIme.triggerMatchMode': 'exact',
