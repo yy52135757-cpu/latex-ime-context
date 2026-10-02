@@ -2,7 +2,7 @@
   "name": "latex-ime-context",
   "displayName": "LaTeX IME Context",
   "description": "按 LaTeX 结构自动切换输入法：数学环境 / 命令 / 参数默认英文，正文 / 注释 / \\text{} 默认中文。",
-  "version": "0.10.13",
+  "version": "0.10.14",
   "publisher": "gryllidae",
   "license": "MIT",
   "engines": {
@@ -53,7 +53,7 @@
       {
         "command": "latexIme.jumpOut",
         "key": "tab",
-        "when": "editorTextFocus && editorLangId == latex && !suggestWidgetVisible && (latexIme.canTabExpand || (latexIme.canJumpOut && !inSnippetMode))"
+        "when": "editorTextFocus && editorLangId == latex && (latexIme.canTabExpand || (latexIme.canJumpOut && !inSnippetMode && !suggestWidgetVisible))"
       },
       {
         "command": "latexIme.resendToggle",

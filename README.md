@@ -6,7 +6,7 @@
 > 📦 **想分享给别人 / 从零开始装？**
 > - 装前准备与逐步安装：[`安装指南.md`](安装指南.md)
 > - 完整功能列表：[`功能清单.md`](功能清单.md)
-> - 现成安装包：`dist/latex-ime-context-0.10.13.vsix` + `dist/latex.hsnips`
+> - 现成安装包：`dist/latex-ime-context-0.10.14.vsix` + `dist/latex.hsnips`
 >
 > 环境要求：**Windows（原生或 WSL）为完整支持**；macOS/Linux 原生下片段展开与智能 Tab 可用，切输入法需自备兼容的 `im-select`。
 > 前置扩展：LaTeX Workshop、HyperSnips for Math。
