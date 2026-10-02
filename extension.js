@@ -592,7 +592,9 @@ function computeJump(editor) {
 
 /** 刷新上下文键 latexIme.canJumpOut（Tab 的按键绑定只在这个键为真时才生效） */
 function refreshJumpContext(editor) {
-  const ok = !!computeJump(editor || vscode.window.activeTextEditor);
+  const ed = editor || vscode.window.activeTextEditor;
+  // Tab 有活干：光标前的词能展开成触发词片段（前缀也算），或能跳出
+  const ok = !!(computeTabExpand(ed) || computeJump(ed));
   if (lastJumpCtx === ok) return;
   lastJumpCtx = ok;
   try { vscode.commands.executeCommand('setContext', 'latexIme.canJumpOut', ok); } catch (e) { /* ignore */ }
@@ -609,10 +611,78 @@ function fallbackTab(editor) {
   });
 }
 
-/** 智能 Tab 的命令：能跳出就跳出，否则走默认 Tab */
+/**
+ * 光标前的词能否展开成触发词片段：
+ *   • 就是某个触发词本身（thm）
+ *   • 或是某个触发词的前缀（func → function，取最短的那个候选）
+ * 返回 { wordStart, caretEnd, snippet, word, typed } 或 null。
+ */
+function computeTabExpand(editor) {
+  try {
+    if (!editor || !isLatexEditor(editor)) return null;
+    if (cfg().get('expandTypedTriggers', true) === false) return null;
+    const sel = editor.selection;
+    if (!sel || !sel.isEmpty) return null;
+    const doc = editor.document;
+    const off = doc.offsetAt(sel.active);
+    const text = doc.getText();
+    const m = /[A-Za-z][A-Za-z0-9]*$/.exec(text.slice(Math.max(0, off - 32), off));
+    if (!m) return null;
+    const typed = m[0];
+    const wordStart = off - typed.length;
+    if (wordStart > 0 && text[wordStart - 1] === '\\') return null;   // \thm 之类不动
+
+    const map = effectiveTriggers();
+    let word = map[typed] ? typed : null;
+    if (!word) {
+      const cands = Object.keys(map)
+        .filter((t) => t.length > typed.length && t.toLowerCase().startsWith(typed.toLowerCase()))
+        .sort((a, b) => a.length - b.length);
+      if (!cands.length) return null;
+      word = cands[0];
+    }
+    const entry = map[word];
+    const snippet0 = typeof entry === 'string' ? entry : entry.body;
+    const flags = typeof entry === 'string' ? '' : (entry.flags || '');
+    if (!snippet0) return null;
+    if (flags.indexOf('m') >= 0) {
+      const r = analyzeContext(text, wordStart, analyzeOptions());
+      if (r.reason !== 'math') return null;
+    }
+    if (flags.indexOf('b') >= 0) {
+      const lineStart = text.lastIndexOf('\n', wordStart - 1) + 1;
+      if (text.slice(lineStart, wordStart).trim() !== '') return null;
+    }
+    let snippet = snippet0;
+    if (/\n/.test(snippet) && !/\n$/.test(snippet)) snippet += '\n';
+    return { wordStart, caretEnd: off, snippet, word, typed };
+  } catch (e) {
+    return null;
+  }
+}
+
+/** 智能 Tab 的命令：先试展开触发词，再试跳出，都不行就走默认 Tab */
 function jumpOut() {
   const ed = vscode.window.activeTextEditor;
   if (!ed) return;
+
+  // ① 光标前的词是触发词或它的前缀（func → function）→ 直接展开
+  const exp = computeTabExpand(ed);
+  if (exp) {
+    const doc = ed.document;
+    const range = new vscode.Range(doc.positionAt(exp.wordStart), doc.positionAt(exp.caretEnd));
+    ed.edit((b) => b.delete(range)).then((ok) => {
+      if (ok === false) return;
+      const p = doc.positionAt(exp.wordStart);
+      ed.selection = new vscode.Selection(p, p);
+      vscode.commands.executeCommand('editor.action.insertSnippet', { snippet: exp.snippet }).then(undefined, () => {});
+      log(`智能 Tab：展开触发词 ${exp.word}`);
+      trace(`智能 Tab：展开触发词 "${exp.word}"（输入的是 "${exp.typed}"）`);
+    });
+    return;
+  }
+
+  // ② 能跳出就跳出
   const hit = computeJump(ed);
   if (!hit) { fallbackTab(ed); return; }
   const doc = ed.document;
@@ -628,6 +698,7 @@ function jumpOut() {
       try { ed.revealRange(new vscode.Range(p, p)); } catch (e) { /* ignore */ }
     });
     log(`智能 Tab：跳出 ${hit.kind}${hit.env ? '(' + hit.env + ')' : ''} 并新建一行`);
+    trace(`智能 Tab：跳出 ${hit.kind}${hit.env ? '(' + hit.env + ')' : ''} 并新建一行`);
     return;
   }
 
@@ -635,6 +706,7 @@ function jumpOut() {
   ed.selection = new vscode.Selection(p, p);
   try { ed.revealRange(new vscode.Range(p, p)); } catch (e) { /* ignore */ }
   log(`智能 Tab：跳出 ${hit.kind}${hit.env ? '(' + hit.env + ')' : ''} → offset ${hit.offset}`);
+  trace(`智能 Tab：跳出 ${hit.kind}${hit.env ? '(' + hit.env + ')' : ''} @${hit.offset}`);
 }
 
 /** 总开关菜单（点击状态栏） */
