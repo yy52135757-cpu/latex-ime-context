@@ -6,7 +6,7 @@
 > 📦 **想分享给别人 / 从零开始装？**
 > - 装前准备与逐步安装：[`安装指南.md`](安装指南.md)
 > - 完整功能列表：[`功能清单.md`](功能清单.md)
-> - 现成安装包：`dist/latex-ime-context-0.11.4.vsix` + `dist/latex.hsnips`
+> - 现成安装包：`dist/latex-ime-context-0.11.5.vsix` + `dist/latex.hsnips`
 >
 > 环境要求：**Windows（原生或 WSL）为完整支持**；macOS/Linux 原生下片段展开与智能 Tab 可用，切输入法需自备兼容的 `im-select`。
 > 前置扩展：LaTeX Workshop、HyperSnips for Math。
@@ -175,7 +175,8 @@ hsnips 会直接跳过——这就是「dm/mk 时好时坏」的真因。现在�
 - 尊重 hsnips 的 `m`（仅数学）与 `b`（仅行首）标志；正则/JS 类片段仍由 hsnips 处理；
 - 多行片段会自动补行尾换行，走完占位符即落到 `\end{…}` 的下一行；
 - 单行片段（如 `set`）走完最后一个占位符后，Tab 逐层**紧贴跳出**（`\{(12)\}` → 先到 `)` 后、再到 `\}` 后）；
-- 由扩展接管的触发词在 hsnips 里已去掉 `A` 标志，需要时仍可用 Tab 手动展开作后备。
+- 由扩展接管的触发词在 hsnips 里已去掉 `A` 标志，需要时仍可用 Tab 手动展开作后备；
+- 补全列表只按**严格前缀**匹配（0.11.5+ 对 LaTeX 文档默认 `"editor.suggest.filterGraceful": false`），不会出现打 `det` 时列表还挂着 `deft` 的情况。
 
 ## 已知限制
 
