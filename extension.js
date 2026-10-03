@@ -391,6 +391,7 @@ function maybeExpandTriggerWord(e, ed) {
       vscode.commands.executeCommand('editor.action.insertSnippet', { snippet }).then(undefined, (err) => {
         vscode.window.showErrorMessage(`LaTeX IME: 展开 ${word} 失败：${err && err.message}`);
       });
+      setSnippetNav(doc, snippet, word);
       log(`触发词展开: ${word}`);
       trace(`展开 "${word}"（原文 ${JSON.stringify(raw.slice(0, 12))}，replaceLen=${ch.rangeLength}）`);
       // 记录片段的占位符位置，供兜底清理使用
@@ -674,6 +675,49 @@ function autoSelectActive(editor) {
   }
 }
 
+// —— 片段占位符跟踪 ——
+// 扩展插入的片段会话里：Tab 先按原生走「真正的」占位符；
+// 走到最后一个占位符后，如果片段是**单行**的（如 set、sum、hat 这类行内片段），
+// 就把 Tab 改成智能 Tab 的「逐层紧贴跳出」——
+// 否则原生会一口气把光标带到片段末尾 $0（如 \{(12)\} 里直接从 (12) 里跳到 \} 外面）。
+// 多行片段（环境、\[…\]、aligned 模板）保持原生：走完占位符直接落到 \end{…} 的下一行。
+let snippetNav = null;   // { uri, remaining, smartPop, word, at }
+const SNIPPET_NAV_MS = 120 * 1000;
+
+function snippetPlaceholderInfo(snippet) {
+  const nums = new Set();
+  let hasZero = false;
+  const re = /\$(\d+)|\$\{(\d+)/g;
+  let m;
+  while ((m = re.exec(snippet)) !== null) {
+    const n = Number(m[1] || m[2]);
+    if (n === 0) hasZero = true;
+    else nums.add(n);
+  }
+  return { count: nums.size, hasZero };
+}
+
+function setSnippetNav(doc, snippet, word) {
+  const info = snippetPlaceholderInfo(snippet);
+  snippetNav = {
+    uri: doc && doc.uri ? doc.uri.toString() : '',
+    remaining: info.count,
+    smartPop: info.count >= 1 && !info.hasZero && !/\n/.test(snippet),
+    word,
+    at: Date.now(),
+  };
+  if (snippetNav.smartPop) trace(`片段 "${word}"：最后一个占位符起 Tab 改为逐层紧贴跳出`);
+}
+
+function snippetNavActive(editor) {
+  if (!snippetNav) return null;
+  if (!editor || !editor.document) return null;
+  const uri = editor.document.uri ? editor.document.uri.toString() : '';
+  if (uri !== snippetNav.uri) return null;
+  if (Date.now() - snippetNav.at > SNIPPET_NAV_MS) return null;
+  return snippetNav;
+}
+
 /** 刷新上下文键（Tab 按键绑定靠它们决定要不要接管） */
 function refreshJumpContext(editor) {
   const ed = editor || vscode.window.activeTextEditor;
@@ -774,6 +818,7 @@ function jumpOut() {
         const p = doc.positionAt(exp.wordStart);
         ed.selection = new vscode.Selection(p, p);
         vscode.commands.executeCommand('editor.action.insertSnippet', { snippet: exp.snippet }).then(undefined, () => {});
+        setSnippetNav(doc, exp.snippet, exp.word);
         log(`智能 Tab：展开触发词 ${exp.word}`);
         trace(`智能 Tab：展开触发词 "${exp.word}"（输入的是 "${exp.typed}"）`);
       });
@@ -993,6 +1038,25 @@ function activate(context) {
     vscode.commands.registerCommand('latexIme.jumpOut', jumpOut),
     // 占位符导航：我们插入的片段是 VS Code 片段会话，hsnips 自己的跳转命令对它无效（Tab 会“没反应”）
     vscode.commands.registerCommand('latexIme.nextPlaceholder', () => {
+      const ed = vscode.window.activeTextEditor;
+      const nav = snippetNavActive(ed);
+      // 还有真正的下一个占位符 → 原生导航
+      if (nav && nav.remaining > 1) {
+        nav.remaining -= 1;
+        trace(`智能 Tab：占位符 → 下一个（还剩 ${nav.remaining} 个）`);
+        return vscode.commands.executeCommand('jumpToNextSnippetPlaceholder');
+      }
+      // 走到最后一个占位符（单行片段）：改成逐层紧贴跳出，有目标才跳
+      if (nav && nav.smartPop) {
+        const hit = ed ? computeJump(ed) : null;
+        if (hit) {
+          const p = ed.document.positionAt(hit.offset);
+          ed.selection = new vscode.Selection(p, p);
+          try { ed.revealRange(new vscode.Range(p, p)); } catch (e) { /* ignore */ }
+          trace(`智能 Tab：片段末段跳出 ${hit.kind}${hit.env ? '(' + hit.env + ')' : ''} @${hit.offset}`);
+          return;
+        }
+      }
       trace('智能 Tab：占位符 → 下一个（VS Code 原生）');
       return vscode.commands.executeCommand('jumpToNextSnippetPlaceholder');
     }),
